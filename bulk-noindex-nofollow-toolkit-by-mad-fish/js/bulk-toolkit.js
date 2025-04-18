@@ -46,10 +46,11 @@ jQuery(".bnitk-mfd-toggle").change(function(b) {
 
 //functionality to Check all visible posts/pages in the table
 jQuery(document).on('change', '#cb-select-all', function(c) {
-	if(this.checked) {   
-		jQuery('.cb-post').attr("checked", "checked");
+	if(this.checked) {   		
+		jQuery('.cb-post').prop( "checked", true );	
     }else{
-		jQuery('.cb-post').attr("checked", null);
+    	jQuery('.cb-post').prop( "checked", false );
+		
     }
 	
 });
@@ -122,16 +123,14 @@ jQuery( "#bulk-update" ).submit(function( event ) {
 			if(status == 'OK'){
 							
 				//set the status of the checkboxes to update (i.e. 'checked' or 'unchecked'
-				var checked_typ = null;
+				var checked_typ = false;
 				if(keyval == 1){
-					checked_typ = 'checked';
+					checked_typ = true;
 				}
 							
 				//iterate through the posts that need to have their checkboxes updated
 				jQuery.each( post_ids, function( k, v ) {
-
-			       jQuery("input[value="+v+"]."+directive+"-check").attr("checked", checked_typ);
-			       
+					jQuery("input[value="+v+"]."+directive+"-check").prop( "checked", checked_typ );			      
 			    });
 
 			}

@@ -77,10 +77,9 @@ if(!class_exists('bulkNoindexToolkit'))
 			$directive_array = array();
 
 			if($this->active_seo_plugin == 'bnitkmfd' || $term_page == True){
-				
+
 				if(is_tax() || is_tag() || is_category()){
 					$tag_id = get_queried_object()->term_id;
-					
 					
 					$meta_data_noidx = get_term_meta($tag_id,'_bnitk_mfd_meta-robots-noindex');
 					$meta_data_nofllw = get_term_meta($tag_id,'_bnitk_mfd_meta-robots-nofollow');	
@@ -128,8 +127,8 @@ if(!class_exists('bulkNoindexToolkit'))
 				
 				//this filter is used to debug the robots meta tag content				
 				//add_filter( 'wp_robots', array(&$this,'list_hooks'),1);				
-
-				//update the Yoast directive on tag pages
+				
+				//update the Yoast Meta Robots directive on tag pages
 				if($this->active_seo_plugin == 'yoast'){
 
 					add_filter( 'wpseo_robots', function( $robots ) use ( $directive_array ) {
@@ -158,6 +157,33 @@ if(!class_exists('bulkNoindexToolkit'))
 				    	
 				    	}
 					);
+				//update the All in One SEO Meta Robots directive on tag pages
+				}elseif($this->active_seo_plugin == 'aioseo'){					
+
+					add_filter( 'aioseo_robots_meta', function( $robots ) use ( $directive_array ){
+
+						if($directive_array){
+							foreach($directive_array as $dKey => $dVal){
+
+								$robots[$dVal] = $dVal;
+							}					
+						}
+
+						return $robots;
+					});
+
+				//update the Rank Math Meta Robots directive on tag pages
+				}elseif($this->active_seo_plugin == 'rankmath'){
+					add_filter( 'rank_math/frontend/robots', function( $robots ) use ( $directive_array ){
+
+						if($directive_array){
+							foreach($directive_array as $dKey => $dVal){
+								$robots[$dVal] = True;
+							}					
+						}
+
+						return $robots;
+					});
 
 				}else{
 
@@ -233,6 +259,12 @@ if(!class_exists('bulkNoindexToolkit'))
 	        	'nofollow' => 'robots_nofollow' 
 	        );
 
+	        //Rank Match SEO Support
+	        $this->meta_keys['rankmath'] = array( 
+	        	'noindex' => 'rank_math_robots', 
+	        	'nofollow' => 'rank_math_robots' 
+	        );
+
 	        //Our own support
 	       	$this->meta_keys['bnitkmfd'] = array( 
 	        	'noindex' => '_bnitk_mfd_meta-robots-noindex', 
@@ -266,7 +298,7 @@ if(!class_exists('bulkNoindexToolkit'))
 				$plugins=get_plugins();
 				$activated_plugins=array();
 				foreach ($apl as $p){           
-				    if(isset($plugins[$p])){				         
+				    if(isset($plugins[$p])){				    	
 				    	
 				    	//confirm that Yoast is installed
 				        if($plugins[$p]['Name'] == 'Yoast SEO'){
@@ -275,6 +307,9 @@ if(!class_exists('bulkNoindexToolkit'))
 				        //confirm that AIOSEO is installed
 				        }elseif($plugins[$p]['Name'] == 'All in One SEO Pro' || $plugins[$p]['Name'] == 'All in One SEO'){
 				        	$this->active_seo_plugin = 'aioseo';
+				        }elseif ($plugins[$p]['Name'] == 'Rank Math SEO') {
+				        	$this->active_seo_plugin = 'rankmath';
+
 				        }
 				    }           
 				}
@@ -307,7 +342,7 @@ if(!class_exists('bulkNoindexToolkit'))
 		 */
 
 		public function get_meta_keys($directive = 'noindex'){
-
+			
 			$this->set_meta_keys();	    		    	
 
 			return $this->meta_keys[$this->active_seo_plugin][$directive];
@@ -352,6 +387,7 @@ if(!class_exists('bulkNoindexToolkit'))
 			return $rendered_html;
 		}
 
+
 		/**
 		 * xss_clean function
 		 * sanitize the search input to prevent Cross-Site Scripting (XSS) attack
@@ -362,14 +398,20 @@ if(!class_exists('bulkNoindexToolkit'))
 		public function xss_clean($data)
 		{
 		// Fix &entity\n;
+		
 		$data = str_replace(array('&amp;','&lt;','&gt;'), array('&amp;amp;','&amp;lt;','&amp;gt;'), $data);
 		$data = preg_replace('/(&#*\w+)[\x00-\x20]+;/u', '$1;', $data);
 		$data = preg_replace('/(&#x*[0-9A-F]+);*/iu', '$1;', $data);
 		$data = html_entity_decode($data, ENT_COMPAT, 'UTF-8');
-
+		
+		$data = filter_var($data, FILTER_SANITIZE_STRING);
+		
 		// Remove any attribute starting with "on" or xmlns
-		$data = preg_replace('#(<[^>]+?[\x00-\x20"\'])(?:on|xmlns)[^>]*+>#iu', '$1>', $data);
+		$data = preg_replace('#(<[^>]+?[\x00-\x20"\'])(?:on|xmlns|autofocus)[^>]*+>#iu', '$1>', $data);
+		//double check that we filter out autofocus, and attributes that start with "on"
+		$data = preg_replace('#(?:on|xmlns|autofocus)#iu', '$1>', $data);
 
+		
 		// Remove javascript: and vbscript: protocols
 		$data = preg_replace('#([a-z]*)[\x00-\x20]*=[\x00-\x20]*([`\'"]*)[\x00-\x20]*j[\x00-\x20]*a[\x00-\x20]*v[\x00-\x20]*a[\x00-\x20]*s[\x00-\x20]*c[\x00-\x20]*r[\x00-\x20]*i[\x00-\x20]*p[\x00-\x20]*t[\x00-\x20]*:#iu', '$1=$2nojavascript...', $data);
 		$data = preg_replace('#([a-z]*)[\x00-\x20]*=([\'"]*)[\x00-\x20]*v[\x00-\x20]*b[\x00-\x20]*s[\x00-\x20]*c[\x00-\x20]*r[\x00-\x20]*i[\x00-\x20]*p[\x00-\x20]*t[\x00-\x20]*:#iu', '$1=$2novbscript...', $data);
@@ -382,6 +424,7 @@ if(!class_exists('bulkNoindexToolkit'))
 
 		// Remove namespaced elements (we do not need them)
 		$data = preg_replace('#</*\w+:\w[^>]*+>#i', '', $data);
+		
 
 		do
 		{
@@ -391,6 +434,7 @@ if(!class_exists('bulkNoindexToolkit'))
 		}
 		while ($old_data !== $data);
 
+		
 		
 		return $data;
 		}
@@ -584,7 +628,6 @@ if(!class_exists('bulkNoindexToolkit'))
 								
 							}else{
 								
-								
 								if($active_key){
 																										
 									//we keep track of the current setting with a custom meta value
@@ -720,6 +763,36 @@ if(!class_exists('bulkNoindexToolkit'))
 											
 											$postAISEO->save();
 										break;
+										case "rankmath":
+										
+											$foundKey = 0;
+											$rm_robots_dat = get_post_meta($post_id,'rank_math_robots');
+
+											//loop through the rankmath postmeta value for the post's robots settings
+											
+											foreach($rm_robots_dat as $k1 => $r1){
+
+												$keyFind = array_search($directive[0],$r1);
+
+												//update the noindex array vaule to index
+												if($directive[0] == 'noindex'){
+													$rm_robots_dat[$k1][$keyFind] = 'index';
+													$foundKey = $k1;
+												}
+
+												//remove the nofllow array vaule and resort the array
+												if($directive[0] == 'nofollow'){
+													$rm_robots_dat[$k1][$keyFind] = 'follow';
+													unset($rm_robots_dat[$k1][$keyFind]);
+													array_values($rm_robots_dat[$k1]);
+													$foundKey = $k1;
+												}											
+												
+											}
+
+											update_post_meta( $post_id, sanitize_text_field( $active_key ), $rm_robots_dat[$foundKey] );
+
+										break;	
 										case "yoast":
 											delete_post_meta($post_id, sanitize_text_field( $active_key ));
 										break;								
@@ -741,6 +814,45 @@ if(!class_exists('bulkNoindexToolkit'))
 											$postAISEO->robots_default = false; 
 											$postAISEO->{$active_key} = $key_val;
 											$postAISEO->save();  
+										break;
+										case "rankmath":
+
+											$foundKey = 0;
+											$rm_robots_dat = get_post_meta($post_id,'rank_math_robots');					
+
+											//loop through the rankmath postmeta value for the post's robots settings
+											//print_r($rm_robots_dat);
+
+											foreach($rm_robots_dat as $k1 => $r1){
+												$keyFind = array_search(str_replace('no','',$directive[0]),$r1);
+												
+												
+												//print_r($r1);
+												//print 'directive: '.$directive[0]."\n";
+												//print 'keyfind: '.$keyFind."\n"; 
+
+												//update the noindex or nofollow array value accordingly
+												if($directive[0] == 'noindex' || $directive[0] == 'nofollow'){
+
+													if($keyFind != ''){
+														$rm_robots_dat[$k1][$keyFind] = $directive[0];
+														$foundKey = $k1;
+													}else{								
+
+														if(!in_array($directive[0],$r1)){
+															$rm_robots_dat[$k1][] = $directive[0];	
+														}
+														
+													}
+													
+
+												}
+
+											}
+											//print_r($rm_robots_dat);
+											//exit;
+											update_post_meta( $post_id, sanitize_text_field( $active_key ), $rm_robots_dat[$foundKey] );
+
 										break;
 										case "yoast":
 											update_post_meta( $post_id, sanitize_text_field( $active_key ), $key_val );
@@ -805,6 +917,7 @@ if(!class_exists('bulkNoindexToolkit'))
 				//double check that the user has the neccessary permissions to edit posts	
 				//and that the nonce is correct
 
+			
 				$post_id = (int)sanitize_text_field($_POST['post_id']);
 				$nonce = sanitize_text_field($_POST['nonce']);
 				
@@ -815,6 +928,7 @@ if(!class_exists('bulkNoindexToolkit'))
 						$directive = sanitize_text_field(str_replace('[]','',$_POST['check_class']));
 						
 						$active_key = $this->get_meta_keys($directive);
+				
 						
 						$post_id = (int)sanitize_text_field($_POST['post_id']);
 						$key_val = (sanitize_text_field($_POST['result']) == 1) ? 1 : 0;
@@ -872,6 +986,37 @@ if(!class_exists('bulkNoindexToolkit'))
 										
 										$postAISEO->save();
 									break;
+									case "rankmath":
+										
+										$foundKey = 0;
+										$rm_robots_dat = get_post_meta($post_id,'rank_math_robots');
+
+										//loop through the rankmath postmeta value for the post's robots settings
+										foreach($rm_robots_dat as $k1 => $r1){
+											$keyFind = array_search($directive,$r1);
+
+											
+											
+											//update the noindex array vaule to index
+											if($directive == 'noindex'){
+												$rm_robots_dat[$k1][$keyFind] = 'index';
+												$foundKey = $k1;
+											}
+
+											//remove the nofllow array vaule and resort the array
+											if($directive == 'nofollow'){
+												$rm_robots_dat[$k1][$keyFind] = 'follow';
+												unset($rm_robots_dat[$k1][$keyFind]);
+												array_values($rm_robots_dat[$k1]);
+												$foundKey = $k1;
+											}
+											
+											
+										}
+										
+										update_post_meta( $post_id, sanitize_text_field( $active_key ), $rm_robots_dat[$foundKey] );
+
+									break;								
 									case "yoast":
 										delete_post_meta($post_id, sanitize_text_field( $active_key ));
 									break;								
@@ -892,6 +1037,36 @@ if(!class_exists('bulkNoindexToolkit'))
 										$postAISEO->robots_default = false; 
 										$postAISEO->{$active_key} = $key_val;
 										$postAISEO->save();  
+									break;
+									case "rankmath":
+
+										$foundKey = 0;
+										$rm_robots_dat = get_post_meta($post_id,'rank_math_robots');
+										
+										//loop through the rankmath postmeta value for the post's robots settings
+										
+										foreach($rm_robots_dat as $k1 => $r1){
+											$keyFind = array_search(str_replace('no','',$directive),$r1);
+											
+											//update the noindex or nofollow array value accordingly
+											if($directive == 'noindex' || $directive == 'nofollow'){
+												
+												if($keyFind != ''){
+													$rm_robots_dat[$k1][$keyFind] = $directive;
+													$foundKey = $k1;
+												}else{								
+													if(!in_array($directive,$rm_robots_dat[$k1])){	
+														$rm_robots_dat[$k1][] = $directive;
+													}
+												}
+												
+
+											}
+
+										}
+
+										update_post_meta( $post_id, sanitize_text_field( $active_key ), $rm_robots_dat[$foundKey] );
+
 									break;
 									case "yoast":
 										update_post_meta( $post_id, sanitize_text_field( $active_key ), $key_val );
@@ -990,28 +1165,107 @@ if(!class_exists('bulkNoindexToolkit'))
 						} */
 
 						/**
-						* Always update the fallback post_meta key that's specific for this plugin
+						* Always update the fallback term_meta key that's specific for this plugin
 						* that way if any of the supported plugins are disabled, we don't lose
 						* track of the pages which should be noindexed
 						**/
-							
+												
+
+						if($active_key){
+
+							switch($active_key){
+								case "rank_math_robots":
+								
+									$meta_key_noidx = $this->get_meta_keys('noindex');
+   									$meta_key_nofllw = $this->get_meta_keys('nofollow');
+									
+									$foundKey = 0;
+									$rm_robots_dat = get_term_meta($term_id,$meta_key_noidx,true);	
+
+									/*
+									print $term_id."\n";
+									print $meta_key_noidx."\n";
+									print_r($rm_robots_dat);
+									print $directive;
+									*/
+									
+									
+									if(!$rm_robots_dat){
+										$rm_robots_dat = array();
+									}
+									
+									//if disabling nofollow or noindex
+									if($key_val == 0){	
+																		
+										$keyFind = array_search($directive,$rm_robots_dat);
+
+										if($directive){
+											switch($directive){
+												case "noindex":
+													$rm_robots_dat[$keyFind] = 'index';
+												break;
+												case "nofollow":
+													$rm_robots_dat[$keyFind] = 'follow';
+													
+													if(count($rm_robots_dat) == 1){
+														$rm_robots_dat[] = 'index';
+													}
+													unset($rm_robots_dat[$keyFind]);
+													array_values($rm_robots_dat);
+												break;
+											}
+
+										}
+										
+										update_term_meta( $term_id, sanitize_text_field( $active_key ), $rm_robots_dat );
+
+									}else{
+										//if activating nofollow or noindex
+
+										$keyFind = array_search(str_replace('no','',$directive),$rm_robots_dat);
+										
+										//update the noindex or nofollow array value accordingly
+										if($directive == 'noindex' || $directive == 'nofollow'){
+
+											if($keyFind != ''){
+												$rm_robots_dat[$keyFind] = $directive;
+												$foundKey = $k1;
+											}else{
+												if(!in_array($directive,$rm_robots_dat)){
+													$rm_robots_dat[] = $directive;
+												}
+											}
+											
+										}
+																			
+										update_term_meta( $term_id, sanitize_text_field( $active_key ), $rm_robots_dat );
+
+								}
+
+								break;
+								/*
+								still need to add support for AIOSEO and Yoast here at a future date
+								default:
+										
+								break;
+								*/
+							}			
+						}
+						//no matter what, updated the plugins default meta-robots term metaß
 						if($key_val == 0){
 
-							if($active_key){
+							update_term_meta( $term_id, '_bnitk_mfd_meta-robots-'.$directive, $key_val );
 
-								update_term_meta( $term_id, '_bnitk_mfd_meta-robots-'.$directive, $key_val );
-
-								//check to see which plugin is being used
-								
-								//no matter what, we keep track of the current setting 
-								//just in case the Yoast or AISEO plugin are disabled
-								delete_term_meta($term_id, '_bnitk_mfd_meta-robots-'.$directive);				
-							}
+							//check to see which plugin is being used
+							
+							//no matter what, we keep track of the current setting 
+							//just in case the Yoast or AISEO plugin are disabled
+							delete_term_meta($term_id, '_bnitk_mfd_meta-robots-'.$directive);
 							
 						}else{
 							
 							if($active_key){
-						
+							
 								//no matter what, we keep track of the current setting 
 								//just in case the Yoast or AISEO plugin are disabled
 								update_term_meta( $term_id, '_bnitk_mfd_meta-robots-'.$directive, $key_val );

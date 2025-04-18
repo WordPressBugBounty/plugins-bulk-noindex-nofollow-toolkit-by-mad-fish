@@ -1,11 +1,11 @@
 === Bulk NoIndex & NoFollow Toolkit ===
 Contributors: MadFishDigital
 Donate link: https://www.madfishdigital.com/plugins-donate/
-Tags: bulk noindex nofollow, seo penalty recovery, thin content, yoast, All in One SEO (AIOSEO)
+Tags: bulk noindex nofollow, seo penalty recovery, thin content, yoast, All in One SEO (AIOSEO), Rank Math
 Requires PHP: 5.6
 Requires at least: 4.1
-Tested up to: 6.6.2
-Stable tag: 2.16
+Tested up to: 6.8
+Stable tag: 2.20
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl.html
 
@@ -41,7 +41,7 @@ After a page or category is noindexed, in some cases, it can take search engines
 
 7) Visualize of all posts' and pages' "noindex" and "nofollow" statuses
 
-8) Syncs with the Yoast and the All in One SEO Pack (AIOSEO) plugins to maintain and manage your existing noindex and nofollowed posts and pages
+8) Syncs with Rank Math, Yoast and the All in One SEO Pack (AIOSEO) plugins to maintain and manage your existing noindex and nofollowed posts and pages
 
 = Support =
 
@@ -53,16 +53,16 @@ At Mad Fish Digital, we use tools like Screaming Frog, LinkResearch Tools, Ahref
 
 This is where having a tool to bulk noindex/nofollow these pages can become handy. You can easily remove pages from the search index, then remove the noindex directive once the content of those post or pages has been updated.
 
-This plugin will sync pages with your existing Yoast and All In One SEO Pack (AIOSEO) settings, and allows you to do bulk noindexing with Yoast. Syncing of category noindex/nofollow settings with YOAST and All in One SEO Pack is not yet supported.
+This plugin allows you the power to bulk edit the meta robots index and follow directives for your site's categories and pages. This tool is compatible with your existing Rank Math, Yoast and All In One SEO Pack (AIOSEO) settings. Syncing of category noindex/nofollow settings with YOAST and All in One SEO Pack is not yet supported.
 
-By keeping your pages in sync with the noindex/nofollow settings from Yoast and AIOSEO, you never have to worry about duplicating efforts, or worry which plugin is managing your robots directives.
+By keeping your pages in sync with the noindex/nofollow settings for Rank Math, Yoast and AIOSEO, you never have to worry about duplicating efforts, or worry which plugin is managing your robots directives.
 
 
 #### Fallback Protection
 
-If you are not using Yoast or AIOSEO, this plugin is able to continue to serve the appropriate meta robots tag based on the noindex/nofollow as per the settings through the interface. 
+If disable your Rank Math, Yoast or AIOSEO plguins, this plugin is able to continue to serve the appropriate meta robots tag based on the noindex/nofollow as per the settings through the interface. 
 
-If you do disable the Yoast or AIOSEO plugin on your site, be sure to double check the "Bulk NoIndex/NoFollow" interface (from the tools menu) to confirm that your posts and pages are still nofollowed and noindexed accordingly. Robots directives that are set directly through the WP Post editing interface may not always be tracked by this plugin, and those settings may no longer be visible to this plugin if the Yoast and AIOSEO plugins were previously enabled but are later disabled.
+If you do disable the Rank Math, Yoast or AIOSEO plugin on your site, be sure to double check the "Bulk NoIndex/NoFollow" interface (from the tools menu) to confirm that your posts and pages are still nofollowed and noindexed accordingly. Robots directives that are set directly through the WP Post editing interface may not always be tracked by this plugin, and those settings may no longer be visible to this plugin if the Rank Math, Yoast and AIOSEO plugins were previously enabled but are later disabled.
 
 == Screenshots ==
 
@@ -81,9 +81,20 @@ If you do disable the Yoast or AIOSEO plugin on your site, be sure to double che
 
 = Will this plugin play nice if I already use Yoast for noindexing and nofollowing pages? =
 
-Yes, this plugin will sync with Yoast's native noidexing functions
+Yes, this plugin will sync with Yoast's native noidexing settings that are set after it has been installed
+
+= Will this plugin work if I am using the Rank Math plugin for noindexing and nofollowing pages? =
+
+Yes, this plugin syncs with the Rank Math native noidexing and nofollowing settings that are set after it has been installed
+
+= Will this plugin work if I am using the All in One SEO plugin for noindexing and nofollowing pages? =
+
+Yes, this plugin syncs with the All in One SEO native noidexing and nofollowing settings that are set after it has been installed
 
 == Upgrade Notice ==
+
+= 2.20 =
+We recommend upgrading to the latest version as it adds support for the Rank Math SEO plugin, includes a patch for some minor javascript bugs, and includes a patch to address a rare but potential Cross-Site scripting (XSS) vulnerability found by Patchstack
 
 = 2.16 =
 We recommend upgrading to the latest version as it includes a patch to address a rare but potential Cross-Site scripting (XSS) vulnerability
@@ -122,6 +133,11 @@ We recommend upgrading to the lastest version as the latest version corrects som
 We recommend upgrading to the lastest version to avoid potential issues in the case where another plugin or theme prevents the WP 'is_plugin_active' function from properly loading
 
 == Changelog ==
+
+= 2.20 =
+Release Date: April 18, 2025
+
+Added support for Rank Math, minor javascript bug fix when bulk selecting pagese and categories, patched a potential vulnerability
 
 = 2.16 =
 Release Date: September 24, 2024

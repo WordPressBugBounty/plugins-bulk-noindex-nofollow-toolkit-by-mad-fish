@@ -61,7 +61,7 @@ class BNI_MFD_WP_Table extends WP_List_Table
         
         if(isset($_POST['s'])){
         
-             $query_args['s'] = $_POST['s'];
+             $query_args['s'] = filter_var($_POST['s'], FILTER_SANITIZE_STRING);
 
         }
         
@@ -102,26 +102,47 @@ class BNI_MFD_WP_Table extends WP_List_Table
                     $pCounter[$_pDat->post_type] = 1;
                 }
                 
+                if($active_seo_plugin){                    
+                    switch($active_seo_plugin){
+                        case "rankmath":                        
+                        
+                            $rankmath_robots_values = get_post_meta($pDat->ID,$meta_key_noidx,true);                            
 
-                //query the post settings if AIOSEO is in use
-                if($active_seo_plugin == 'aioseo'){
+                            if(array_search('noindex',$rankmath_robots_values) != ''){
+                                $_pDat->noindex_status = 1;
+                            }else{
+                                $_pDat->noindex_status = 0;
+                            }
+                            
+                            if(array_search('nofollow',$rankmath_robots_values) != ''){
+                                $_pDat->nofollow_status = 1;
+                            }else{
+                                $_pDat->nofollow_status = 0;
+                            }
 
-                    $postAISEO = aioseo()->core->db->start( 'aioseo_posts' )
-                    ->where( 'post_id', $pDat->ID )
-                    ->run()
-                    ->model( 'AIOSEO\\Plugin\\Common\\Models\\Post' );      
+                        break;
+                        case "aioseo":
 
-                    $_pDat->noindex_status = $postAISEO->robots_noindex;
-                    $_pDat->nofollow_status = $postAISEO->robots_nofollow;
+                            $postAISEO = aioseo()->core->db->start( 'aioseo_posts' )
+                                ->where( 'post_id', $pDat->ID )
+                                ->run()
+                                ->model( 'AIOSEO\\Plugin\\Common\\Models\\Post' );      
 
-                }else{
-                    //If AIOSEO is not in use, use the post meta values
-                    $_pDat->noindex_status = get_post_meta($pDat->ID,$meta_key_noidx,true);
-                    $_pDat->nofollow_status = get_post_meta($pDat->ID,$meta_key_nofllw,true);
-                
+                            $_pDat->noindex_status = $postAISEO->robots_noindex;
+                            $_pDat->nofollow_status = $postAISEO->robots_nofollow;
+
+                        break; 
+                        default:
+
+                            //If AIOSEO is not in use, use the post meta values
+                            $_pDat->noindex_status = get_post_meta($pDat->ID,$meta_key_noidx,true);
+                            $_pDat->nofollow_status = get_post_meta($pDat->ID,$meta_key_nofllw,true);
+
+                        break;
+                    }
+
                 }
                 
-
                 $all_post_array[] = $_pDat;
                 
             }
@@ -194,9 +215,7 @@ class BNI_MFD_WP_Table extends WP_List_Table
             'taxonomy' => $cat_types,
             'hierarchical' => True,  
             'hide_empty' => false          
-        );
-
-        
+        );        
         
         if($this->orderby == 'post_count'){
             $cat_args['orderby'] = 'count';
@@ -211,8 +230,8 @@ class BNI_MFD_WP_Table extends WP_List_Table
         }
 
         if(isset($_POST['s'])){
-        
-             $cat_args['search'] = $_POST['s'];
+            
+            $cat_args['search'] = filter_var($_POST['s'], FILTER_SANITIZE_STRING);
 
         }
 
@@ -231,15 +250,18 @@ class BNI_MFD_WP_Table extends WP_List_Table
             
         $all_categories = array_slice($all_categories,$offset,$per_page);
 
+        //hard code the keys for categories to the default, or use rankmath
+        //there is not yet support for Yoast or AIOSEO
         
-
+        $active_seo_plugin = $bulkToolKit_plugin->get_seo_plugin();
+        if($active_seo_plugin == 'rankmath'){
+            $meta_key_noidx = $bulkToolKit_plugin->get_meta_keys('noindex');
+            $meta_key_nofllw = $bulkToolKit_plugin->get_meta_keys('nofollow');
+        }else{
+            $meta_key_noidx = '_bnitk_mfd_meta-robots-noindex';
+            $meta_key_nofllw = '_bnitk_mfd_meta-robots-nofollow';
+        }
         
-
-        //hard code the keys for categories since there is not yet support for Yoast or AIOSEO
-        $meta_key_noidx = '_bnitk_mfd_meta-robots-noindex';
-        $meta_key_nofllw = '_bnitk_mfd_meta-robots-nofollow';
-        
-                        
 
         $cCounter = array ();        
         $this->total_visible_cats = 0;
@@ -264,14 +286,41 @@ class BNI_MFD_WP_Table extends WP_List_Table
                 
 
                 // integration with Yoast and AIOSEO not yet supported for categories //
+                // rankmath integration does work correctly //
 
+                if($active_seo_plugin){
+                    switch($active_seo_plugin){
+                        case "rankmath":
+                            $rankmath_robots_values = get_term_meta($cDat->term_id,$meta_key_noidx,true);
+                            
+                            if($rankmath_robots_values){
+                                
 
-              
-                $_cDat->noindex_status = get_term_meta($cDat->term_id,$meta_key_noidx,true);
-                $_cDat->nofollow_status = get_term_meta($cDat->term_id,$meta_key_nofllw,true);
-                                                    
-              
-                
+                                if(array_search('noindex',$rankmath_robots_values) != ''){
+                                    $_cDat->noindex_status = 1;
+                                }else{
+                                    $_cDat->noindex_status = 0;
+                                }
+                                
+                                if(array_search('nofollow',$rankmath_robots_values) != ''){
+                                    $_cDat->nofollow_status = 1;
+                                }else{
+                                    $_cDat->nofollow_status = 0;
+                                }
+
+                            }else{
+                                //fallback to the default tracking if there's no rankmath record yet
+                                //rankmath will override this setting if the individual category is set
+                                $_cDat->noindex_status = get_term_meta($cDat->term_id,'_bnitk_mfd_meta-robots-noindex',true);
+                                $_cDat->nofollow_status = get_term_meta($cDat->term_id,'_bnitk_mfd_meta-robots-nofollow',true);    
+                            }
+                        break;
+                        default:
+                            $_cDat->noindex_status = get_term_meta($cDat->term_id,$meta_key_noidx,true);
+                            $_cDat->nofollow_status = get_term_meta($cDat->term_id,$meta_key_nofllw,true);
+                        break;
+                    }
+                }                
                 
                 $all_post_array[] = $_cDat;
                 
@@ -313,7 +362,7 @@ class BNI_MFD_WP_Table extends WP_List_Table
     public function set_search_filter(){
         $search_filter = '';
         if ( isset( $_GET['s'] ) && $_GET['s'] )
-            $search_filter = sanitize_text_field($_GET['s']);
+            $search_filter = sanitize_text_field(filter_var($_GET['s'], FILTER_SANITIZE_STRING));
         $this->search_filter = esc_sql( $search_filter );
 
     }
