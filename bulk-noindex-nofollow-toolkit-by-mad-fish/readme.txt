@@ -1,7 +1,7 @@
 === Bulk NoIndex & NoFollow Toolkit ===
 Contributors: MadFishDigital
 Donate link: https://www.madfishdigital.com/plugins-donate/
-Tags: bulk noindex nofollow, seo penalty recovery, thin content, yoast, All in One SEO (AIOSEO), Rank Math
+Tags: bulk noindex nofollow, seo penalty recovery, yoast, All in One SEO (AIOSEO), Rank Math
 Requires PHP: 5.6
 Requires at least: 4.1
 Tested up to: 6.8
