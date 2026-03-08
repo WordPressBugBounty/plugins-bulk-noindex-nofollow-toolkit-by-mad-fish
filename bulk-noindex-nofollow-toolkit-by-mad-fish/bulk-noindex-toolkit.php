@@ -4,14 +4,14 @@ Plugin Name: Bulk NoIndex & NoFollow Toolkit (by Mad Fish)
 Plugin URI: https://www.madfishdigital.com/wp-plugin/
 Description: Easily make bulk changes to the noindex and nofollow robots directive of pages, posts, custom post types, categories, and terms in your website
 Author: Mad Fish Digital
-Version: 2.20
+Version: 2.30
 Author URI: https://www.madfishdigital.com/
 License: GPLv3
 
 
 */
 
-	include('inc/bulk-noindex-toolkit-class.php');
+	include( plugin_dir_path( __FILE__ ) . 'inc/bulk-noindex-toolkit-class.php' );
 	
 	$bulkToolKit_plugin = new bulkNoindexToolkit();
 
@@ -24,7 +24,10 @@ License: GPLv3
 		add_action( 'wp_ajax_update_page_bulk_callback', array($bulkToolKit_plugin, 'update_page_bulk_callback' ));	
 
 		add_action( 'wp_ajax_update_cat_callback', array($bulkToolKit_plugin, 'update_cat_callback') );
-		add_action( 'wp_ajax_update_cat_bulk_callback', array($bulkToolKit_plugin, 'update_cat_bulk_callback' ));	
+		add_action( 'wp_ajax_update_cat_bulk_callback', array($bulkToolKit_plugin, 'update_cat_bulk_callback' ));
+
+		add_action( 'wp_ajax_update_author_callback', array($bulkToolKit_plugin, 'update_author_callback') );
+		add_action( 'wp_ajax_update_author_bulk_callback', array($bulkToolKit_plugin, 'update_author_bulk_callback') );
 	}
 
 			

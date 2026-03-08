@@ -84,10 +84,25 @@ if(!class_exists('bulkNoindexToolkit'))
 					$meta_data_noidx = get_term_meta($tag_id,'_bnitk_mfd_meta-robots-noindex');
 					$meta_data_nofllw = get_term_meta($tag_id,'_bnitk_mfd_meta-robots-nofollow');	
 					
-				}elseif(is_page()){
+				}elseif(is_singular()){
 					$post_id = get_the_ID();
 					$meta_data_noidx = get_post_meta($post_id,'_bnitk_mfd_meta-robots-noindex');
 					$meta_data_nofllw = get_post_meta($post_id,'_bnitk_mfd_meta-robots-nofollow');
+				}elseif(is_author()){
+					$author_id = get_queried_object()->ID;
+					if($this->active_seo_plugin == 'rankmath'){
+						$rm_robots = get_user_meta($author_id, 'rank_math_robots', true);
+						if(is_array($rm_robots)){
+							$meta_data_noidx  = array( in_array('noindex',  $rm_robots) ? 1 : 0 );
+							$meta_data_nofllw = array( in_array('nofollow', $rm_robots) ? 1 : 0 );
+						} else {
+							$meta_data_noidx  = get_user_meta($author_id, '_bnitk_mfd_meta-robots-noindex');
+							$meta_data_nofllw = get_user_meta($author_id, '_bnitk_mfd_meta-robots-nofollow');
+						}
+					} else {
+						$meta_data_noidx  = get_user_meta($author_id, '_bnitk_mfd_meta-robots-noindex');
+						$meta_data_nofllw = get_user_meta($author_id, '_bnitk_mfd_meta-robots-nofollow');
+					}
 				}
 
 				if(isset($meta_data_noidx[0])){					
@@ -216,17 +231,6 @@ if(!class_exists('bulkNoindexToolkit'))
 		* @return void		 
 		*/
 
-		public function list_hooks( $robots ) {
-			global $wp_filter;
-
-			echo "<!-- This is a list of callback functions hooked into the 'wp_robots' filter:";
-			echo json_encode($wp_filter['wp_robots'], JSON_PRETTY_PRINT);
-			echo "-->";
-
-			return $robots;
-		}
-
-
 		/**
 		* Check to see if a specific plugin is active
 		* can't rely on is_plugin_active() since it
@@ -349,6 +353,21 @@ if(!class_exists('bulkNoindexToolkit'))
 		}
 
 		/**
+		 * Get the appropriate user_meta key for storing author robots settings
+		 * @access public
+		 * @return string
+		 */
+		public function get_author_meta_key($directive = 'noindex'){
+			// Rank Math uses its own user meta key (array-based, synced with its UI)
+			if($this->active_seo_plugin == 'rankmath'){
+				return 'rank_math_robots';
+			}
+			// Yoast and AIOSEO don't support per-author noindex/nofollow via user meta,
+			// so always fall back to the plugin's own user meta key
+			return '_bnitk_mfd_meta-robots-' . $directive;
+		}
+
+		/**
 		 * create_menu function
 		 * generate the link to the options page under settings
 		 * @access public
@@ -373,14 +392,14 @@ if(!class_exists('bulkNoindexToolkit'))
 			//set the search value if we're in the middle of a search
 			$search_filter_val = '';
 			if ( isset( $_GET['s'] ) AND $_GET['s'] ){
-				$search_filter_val = $this->xss_clean(filter_var(esc_sql($_GET['s']), FILTER_SANITIZE_STRING));
+			$search_filter_val = sanitize_text_field($_GET['s']);
 			}
             			
 		    $rendered_html = '<form name="search" method="post">';
 		    $rendered_html .= '<input type="hidden" name="page" value="no-index-toolkit" />';		           
 		    $rendered_html .= '<p class="search-box">';
 			$rendered_html .= '<label class="screen-reader-text" for="search-res-search-input">Search:</label>';
-			$rendered_html .= '<input type="search" id="search-res-search-input" name="s" value="'.$search_filter_val.'">';
+			$rendered_html .= '<input type="search" id="search-res-search-input" name="s" value="'.esc_attr($search_filter_val).'">';
 			$rendered_html .= '<input type="submit" id="search-submit" class="button" value="Search"></p>';
 			$rendered_html .= '</form>';
 
@@ -397,46 +416,7 @@ if(!class_exists('bulkNoindexToolkit'))
 
 		public function xss_clean($data)
 		{
-		// Fix &entity\n;
-		
-		$data = str_replace(array('&amp;','&lt;','&gt;'), array('&amp;amp;','&amp;lt;','&amp;gt;'), $data);
-		$data = preg_replace('/(&#*\w+)[\x00-\x20]+;/u', '$1;', $data);
-		$data = preg_replace('/(&#x*[0-9A-F]+);*/iu', '$1;', $data);
-		$data = html_entity_decode($data, ENT_COMPAT, 'UTF-8');
-		
-		$data = filter_var($data, FILTER_SANITIZE_STRING);
-		
-		// Remove any attribute starting with "on" or xmlns
-		$data = preg_replace('#(<[^>]+?[\x00-\x20"\'])(?:on|xmlns|autofocus)[^>]*+>#iu', '$1>', $data);
-		//double check that we filter out autofocus, and attributes that start with "on"
-		$data = preg_replace('#(?:on|xmlns|autofocus)#iu', '$1>', $data);
-
-		
-		// Remove javascript: and vbscript: protocols
-		$data = preg_replace('#([a-z]*)[\x00-\x20]*=[\x00-\x20]*([`\'"]*)[\x00-\x20]*j[\x00-\x20]*a[\x00-\x20]*v[\x00-\x20]*a[\x00-\x20]*s[\x00-\x20]*c[\x00-\x20]*r[\x00-\x20]*i[\x00-\x20]*p[\x00-\x20]*t[\x00-\x20]*:#iu', '$1=$2nojavascript...', $data);
-		$data = preg_replace('#([a-z]*)[\x00-\x20]*=([\'"]*)[\x00-\x20]*v[\x00-\x20]*b[\x00-\x20]*s[\x00-\x20]*c[\x00-\x20]*r[\x00-\x20]*i[\x00-\x20]*p[\x00-\x20]*t[\x00-\x20]*:#iu', '$1=$2novbscript...', $data);
-		$data = preg_replace('#([a-z]*)[\x00-\x20]*=([\'"]*)[\x00-\x20]*-moz-binding[\x00-\x20]*:#u', '$1=$2nomozbinding...', $data);
-
-		// Only works in IE: <span style="width: expression(alert('Ping!'));"></span>
-		$data = preg_replace('#(<[^>]+?)style[\x00-\x20]*=[\x00-\x20]*[`\'"]*.*?expression[\x00-\x20]*\([^>]*+>#i', '$1>', $data);
-		$data = preg_replace('#(<[^>]+?)style[\x00-\x20]*=[\x00-\x20]*[`\'"]*.*?behaviour[\x00-\x20]*\([^>]*+>#i', '$1>', $data);
-		$data = preg_replace('#(<[^>]+?)style[\x00-\x20]*=[\x00-\x20]*[`\'"]*.*?s[\x00-\x20]*c[\x00-\x20]*r[\x00-\x20]*i[\x00-\x20]*p[\x00-\x20]*t[\x00-\x20]*:*[^>]*+>#iu', '$1>', $data);
-
-		// Remove namespaced elements (we do not need them)
-		$data = preg_replace('#</*\w+:\w[^>]*+>#i', '', $data);
-		
-
-		do
-		{
-		    // Remove really unwanted tags
-		    $old_data = $data;
-		    $data = preg_replace('#</*(?:applet|b(?:ase|gsound|link)|embed|frame(?:set)?|i(?:frame|layer)|l(?:ayer|ink)|meta|object|s(?:cript|tyle)|title|xml)[^>]*+>#i', '', $data);
-		}
-		while ($old_data !== $data);
-
-		
-		
-		return $data;
+		return sanitize_text_field( $data );
 		}
 
 
@@ -452,7 +432,7 @@ if(!class_exists('bulkNoindexToolkit'))
 			include('bulk-noindex-toolkit-table.php');
 
 			//add the jquery javascript to the options page
-			wp_enqueue_script( 'bulk-toolkit',  plugin_dir_url( __FILE__ ) .'../js/bulk-toolkit.js', array('jquery'), '1.10' );
+			wp_enqueue_script( 'bulk-toolkit',  plugin_dir_url( __FILE__ ) .'../js/bulk-toolkit.js', array('jquery'), '1.11' );
 
 			//add the CSS stylesheet to the options page
 			wp_enqueue_style('bulk-toolkit',plugin_dir_url( __FILE__ ) .'../css/bulk-toolkit.css');
@@ -466,16 +446,9 @@ if(!class_exists('bulkNoindexToolkit'))
             echo '<div class="logo-col">';
             echo '<img src="'.plugin_dir_url( __FILE__ ) .'../img/madfishdigital-logo.png" width="200" alt="Mad Fish Digital Logo">';
             echo '<div class="docTxt">';            
-            echo '<p>This plugin was built by the team at Mad Fish Digital to help manage the indexation of content posts and pages in large websites that may have had thin content added to them over time. Primarily websites that may have been hit by a search engine penalty or filter as a result of the thin content. </p>            
-            	<p>Toggle on/off a robots meta tag containing NoIndex, or Nofollow with the controls below.</p>
-            	<p>This plugin supports existing meta robots tags set by the <strong>Yoast and All in One SEO Pack</strong> plugins for pages only. Robots directives set by Yoast and AIOSEO are not synced with this plugin. The Yoast global noindex settings for categories and terms will override this plugin\'s individual page settings. </p>
-
-            	<p>This is an advanced tool. Only use it if you feel comfortable with noindexing and nofollowing web pages. Make sure to check back here if you disable or activate the Yoast or AIOSEO plugins, as your noindex settings could be out of sync.</p>
-            	<p class="red-clr">NoIndexing a post or a page will prevent it from appearing in the search engines. We are not responsible if you remove important pages from search engines.<br />Please use this tool with caution, and at your own risk. <br />
-
-            	</p>
-
-            	
+            echo '<p>Built by <a href="https://www.madfishdigital.com/" target="_blank">Mad Fish Digital</a> to bulk manage NoIndex and NoFollow directives across posts, pages, categories, and author URLs. Toggle robots meta tags using the tabs below.</p>
+            	<p>Supports <strong>Yoast SEO</strong>, <strong>AIOSEO</strong>, and <strong>Rank Math</strong>. If you activate or deactivate any of these plugins, review your settings here to ensure directives remain in sync.</p>
+            	<p class="red-clr"><strong>Use with caution.</strong> NoIndexing a URL removes it from search engine results. The plugin creator is not responsible for unintended changes to your site\'s indexation.</p>
             	';
 
             echo '</div>';
@@ -486,18 +459,25 @@ if(!class_exists('bulkNoindexToolkit'))
          	//show the correct tab based on the GET param
          	if(isset($_GET['tab']) && $_GET['tab'] == 'cats'){
          		$tab1 = '';
-         		$tab2 = 'class="active"';         		         		
-         	}else{
+         		$tab2 = 'class="active"';
+         		$tab3 = '';
+         	} elseif(isset($_GET['tab']) && $_GET['tab'] == 'authors'){
+         		$tab1 = '';
+         		$tab2 = '';
+         		$tab3 = 'class="active"';
+         	} else {
          		$tab1 = 'class="active"';
-         		$tab2 = '';         		
+         		$tab2 = '';
+         		$tab3 = '';
          	}
 
             
 			echo '<div id="container">
 				  <header class="tabs-nav">
 				    <ul>
-				      <li '.$tab1.'><a href="'.sanitize_text_field( esc_html(remove_query_arg(array('ct','orderby','order','items_per_page','paged')))).'&tab=posts">Posts</a></li>
-				      <li '.$tab2.'><a href="'.sanitize_text_field(esc_html(remove_query_arg(array('pt','orderby','order','items_per_page','paged')))).'&tab=cats"">Categories</a></li>
+				      <li '.$tab1.'><a href="'.esc_url(sanitize_text_field(remove_query_arg(array('ct','orderby','order','items_per_page','paged'))).'&tab=posts').'">Posts</a></li>
+				      <li '.$tab2.'><a href="'.esc_url(sanitize_text_field(remove_query_arg(array('pt','orderby','order','items_per_page','paged'))).'&tab=cats').'">Categories</a></li>
+				      <li '.$tab3.'><a href="'.esc_url(sanitize_text_field(remove_query_arg(array('pt','ct','orderby','order','items_per_page','paged'))).'&tab=authors').'">Authors</a></li>
 				      
 				    </ul>
 				  </header>';
@@ -510,7 +490,7 @@ if(!class_exists('bulkNoindexToolkit'))
             $BNI_Table->set_search_filter();
 
 
-            if(!isset($_GET['tab']) || $_GET['tab'] == 'posts' || !in_array($_GET['tab'],array('posts','cats'))){
+            if(!isset($_GET['tab']) || $_GET['tab'] == 'posts' || !in_array($_GET['tab'],array('posts','cats','authors'))){
 	        	echo '<div class="tabList" id="tab1" >';
 	            echo '<div>';            
 					//render the search filter            
@@ -554,6 +534,28 @@ if(!class_exists('bulkNoindexToolkit'))
 	            echo '</div>'; 
 	        }
 
+	        if(isset($_GET['tab']) && $_GET['tab'] == 'authors'){
+	            echo '<div class="tabList" id="tab3">';
+
+ 				echo '<div>';
+					//render the search filter
+	            	echo $this->create_search_box();
+
+		            //render the items per page filter
+		            $BNI_Table->show_items_per_page();
+
+	            echo '</div>';
+
+	            echo '<form id="bulk-update" method="post" rel="authorForm">';
+	            echo '<input type="hidden" name="nonce" value="'.wp_create_nonce('bulk-noindex').'">';
+
+	            $BNI_Table->prepare_items_authors();
+	            $BNI_Table->display();
+	            echo '</form>';
+
+	            echo '</div>';
+	        }
+
             echo '</section>';
 			echo '</div>';
 
@@ -576,7 +578,7 @@ if(!class_exists('bulkNoindexToolkit'))
 
 			if(is_archive()){
 				$this->check_meta_robots(True);				
-			}elseif(is_page()){
+			}elseif(is_singular()){
 				$this->check_meta_robots(False);	
 			}			
 		
@@ -611,7 +613,19 @@ if(!class_exists('bulkNoindexToolkit'))
 
 					if(isset($_POST['post_ids'])){
 						$post_id_vals = $_POST['post_ids'];
-						$post_id_vals = array_map( 'sanitize_text_field', $post_id_vals );
+						$post_id_vals = array_map( 'absint', $post_id_vals );
+
+					// Verify the user can edit each individual post
+					foreach($post_id_vals as $idx => $pid){
+						if( !current_user_can('edit_post', $pid) ){
+							$status = array(
+								'status' => 'err',
+								'msg' => 'You do not have permission to edit one or more of the selected posts.'
+							);
+							echo json_encode($status);
+							wp_die();
+						}
+					}
 
 						foreach($post_id_vals as $idx => $post_id){
 
@@ -674,6 +688,112 @@ if(!class_exists('bulkNoindexToolkit'))
 		}
 
 		/**
+		 * Update bulk author noindex and nofollow status
+		 * this function is used as an AJAX callback to modify the noindex or nofollow
+		 * status in bulk for author archive pages
+		 * @access public
+		 * @return void
+		 */
+		public function update_author_bulk_callback(){
+
+			$bulk_directive = sanitize_text_field($_POST['directive']);
+			$nonce = sanitize_text_field($_POST['nonce']);
+
+			if(current_user_can('manage_options') && wp_verify_nonce( $nonce, 'bulk-noindex' ) ){
+
+				if(isset($_POST) && $bulk_directive != '-1'){
+
+					//set the appropriate directive based on the post
+					$directive = explode('_',$bulk_directive);
+
+					//set the appropriate post_meta key value to use
+					$key_val = ($directive[1] == 'set') ? 1 : 0;
+
+					if(isset($_POST['post_ids'])){
+						$post_id_vals = $_POST['post_ids'];
+						$post_id_vals = array_map( 'absint', $post_id_vals );
+
+						foreach($post_id_vals as $idx => $author_id){
+
+							if($this->active_seo_plugin == 'rankmath'){
+
+								$rm_robots_dat = get_user_meta($author_id, 'rank_math_robots', true);
+								if(!is_array($rm_robots_dat)){
+									$rm_robots_dat = array();
+								}
+
+								if($key_val == 0){
+									// Remove the directive from the Rank Math robots array
+									$search_key = array_search($directive[0], $rm_robots_dat);
+									if($search_key !== false){
+										// Replace with the positive directive (noindex->index, nofollow->follow)
+										$rm_robots_dat[$search_key] = str_replace('no', '', $directive[0]);
+									}
+								} else {
+									// Add the directive to the Rank Math robots array
+									$positive = str_replace('no', '', $directive[0]);
+									$search_key = array_search($positive, $rm_robots_dat);
+									if($search_key !== false){
+										$rm_robots_dat[$search_key] = $directive[0];
+									} elseif(!in_array($directive[0], $rm_robots_dat)){
+										$rm_robots_dat[] = $directive[0];
+									}
+								}
+
+								update_user_meta( $author_id, 'rank_math_robots', $rm_robots_dat );
+
+							} else {
+
+								if($key_val == 0){
+									delete_user_meta($author_id, '_bnitk_mfd_meta-robots-'.$directive[0]);
+								} else {
+									update_user_meta( $author_id, '_bnitk_mfd_meta-robots-'.$directive[0], $key_val );
+								}
+							}
+
+							// Always keep plugin's own meta in sync as a fallback
+							if($key_val == 0){
+								delete_user_meta($author_id, '_bnitk_mfd_meta-robots-'.$directive[0]);
+							} else {
+								update_user_meta( $author_id, '_bnitk_mfd_meta-robots-'.$directive[0], $key_val );
+							}
+
+						}
+
+						$msg_author = (count($_POST['post_ids']) == 1) ? 'author' : 'authors';
+						$msg_nfi = ($key_val == 1) ? 'added' : 'removed';
+
+						$status = array(
+							'status' => 'OK',
+							'msg' => count($_POST['post_ids']).' '.$msg_author.' have had the '.ucwords($directive[0]).' robots directive '.$msg_nfi,
+							'directive' => $directive[0],
+							'val' => $key_val,
+							'post_ids' => $post_id_vals,
+						);
+
+					}else{
+						$status = array(
+							'status' => 'err',
+							'msg' => 'No authors were selected'
+						);
+					}
+
+					echo json_encode($status);
+
+				}
+			}else{
+				$status = array(
+					'status' => 'err',
+					'msg' => 'Security check failed. No authors were changed.'
+				);
+				echo json_encode($status);
+			}
+
+			wp_die();
+
+		}
+
+		/**
 		 * Update bulk pages noindex and nofollow status
 		 * this function is used as an AJAX callback to modify the noindex or nofollow 
 		 * status of bulk posts/pages		 
@@ -686,7 +806,7 @@ if(!class_exists('bulkNoindexToolkit'))
 			$bulk_directive = sanitize_text_field($_POST['directive']);			
 			$nonce = sanitize_text_field($_POST['nonce']);
 			
-			if(current_user_can('edit_post' ,$_POST['post_ids'][0]) && wp_verify_nonce( $nonce, 'bulk-noindex' ) ){
+			if(current_user_can('edit_posts') && wp_verify_nonce( $nonce, 'bulk-noindex' ) ){
 
 				if(isset($_POST) && $bulk_directive != '-1'){
 
@@ -701,7 +821,19 @@ if(!class_exists('bulkNoindexToolkit'))
 
 					if(isset($_POST['post_ids'])){
 						$post_id_vals = $_POST['post_ids'];
-						$post_id_vals = array_map( 'sanitize_text_field', $post_id_vals );
+						$post_id_vals = array_map( 'absint', $post_id_vals );
+
+						// Verify the user can edit each individual post
+						foreach($post_id_vals as $idx => $pid){
+							if( !current_user_can('edit_post', $pid) ){
+								$status = array(
+									'status' => 'err',
+									'msg' => 'You do not have permission to edit one or more of the selected posts.'
+								);
+								echo json_encode($status);
+								wp_die();
+							}
+						}
 
 						foreach($post_id_vals as $idx => $post_id){
 
@@ -1309,6 +1441,101 @@ if(!class_exists('bulkNoindexToolkit'))
 			    
 			    wp_die(); 
 			}
+
+
+		/**
+		 * Update single author noindex and nofollow status
+		 * this function is used as an AJAX callback to modify the noindex or nofollow
+		 * status of a single author archive page
+		 * @access public
+		 * @return void
+		 */
+		public function update_author_callback() {
+
+			$new_val = 0;
+
+			$author_id = absint($_POST['post_id']);
+			$nonce = sanitize_text_field($_POST['nonce']);
+
+			if(current_user_can( 'manage_options') && wp_verify_nonce( $nonce, 'bulk-noindex' )){
+
+				if(isset($_POST) && isset($_POST['result'])){
+
+					$directive = sanitize_text_field(str_replace('[]','',$_POST['check_class']));
+					$key_val = (sanitize_text_field($_POST['result']) == 1) ? 1 : 0;
+
+					if($this->active_seo_plugin == 'rankmath'){
+
+						$rm_robots_dat = get_user_meta($author_id, 'rank_math_robots', true);
+						if(!is_array($rm_robots_dat)){
+							$rm_robots_dat = array();
+						}
+
+						if($key_val == 0){
+							// Remove the directive (noindex -> index, nofollow -> follow)
+							$keyFind = array_search($directive, $rm_robots_dat);
+							if($directive == 'noindex'){
+								if($keyFind !== false){
+									$rm_robots_dat[$keyFind] = 'index';
+								}
+							} elseif($directive == 'nofollow'){
+								if($keyFind !== false){
+									unset($rm_robots_dat[$keyFind]);
+									$rm_robots_dat = array_values($rm_robots_dat);
+								}
+							}
+						} else {
+							// Add the directive
+							$positive = str_replace('no', '', $directive);
+							$keyFind = array_search($positive, $rm_robots_dat);
+							if($keyFind !== false){
+								$rm_robots_dat[$keyFind] = $directive;
+							} elseif(!in_array($directive, $rm_robots_dat)){
+								$rm_robots_dat[] = $directive;
+							}
+						}
+
+						update_user_meta( $author_id, 'rank_math_robots', $rm_robots_dat );
+
+					}
+
+					// Always keep plugin's own meta in sync as a fallback
+					if($key_val == 0){
+						delete_user_meta($author_id, '_bnitk_mfd_meta-robots-'.$directive);
+					} else {
+						update_user_meta( $author_id, '_bnitk_mfd_meta-robots-'.$directive, $key_val );
+					}
+
+					if($key_val == 1){
+						$message = 'The author\'s robots directive has been set to '.$directive;
+					}else{
+						$message = 'The '.$directive.' directive has been removed from the author';
+					}
+					$status = array(
+						'status' => 'OK',
+						'directive' => $directive,
+						'msg' => $message,
+						'val' => $key_val,
+						'term_id' => $author_id
+					);
+
+				}else{
+					$status = array(
+						'status' => 'err',
+						'msg' => 'No author was selected'
+					);
+				}
+			}else{
+				$status = array(
+					'status' => 'err',
+					'msg' => 'Edit failed. Must be logged in to make edits.'
+				);
+			}
+
+			echo json_encode($status);
+
+			wp_die();
+		}
 
 
 

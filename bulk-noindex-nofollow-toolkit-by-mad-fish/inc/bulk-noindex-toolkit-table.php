@@ -17,6 +17,7 @@ class BNI_MFD_WP_Table extends WP_List_Table
     private $all_post_vals;
     private $cat_tracker = array();
     private $posts_per_page = 50;
+    private $total_authors = 0;
 
     public function __construct()
     {
@@ -60,8 +61,8 @@ class BNI_MFD_WP_Table extends WP_List_Table
         }      
         
         if(isset($_POST['s'])){
-        
-             $query_args['s'] = filter_var($_POST['s'], FILTER_SANITIZE_STRING);
+
+             $query_args['s'] = sanitize_text_field($_POST['s']);
 
         }
         
@@ -190,14 +191,83 @@ class BNI_MFD_WP_Table extends WP_List_Table
         function pubdate_desc($a, $b) { return ((int)$b->post_date_int > (int)$a->post_date_int);}
         
         //only use the "usort" function if "order" is present in the query string
-        if(isset($_GET['orderby']) && !in_array($_GET['orderby'],array('post_count','taxonomy'))){
+        $allowed_sort_funcs = array('title_asc', 'title_desc', 'words_asc', 'words_desc', 'characters_asc', 'characters_desc', 'pubdate_asc', 'pubdate_desc');
+        if(isset($_GET['orderby']) && !in_array($_GET['orderby'],array('post_count','taxonomy')) && in_array($sort_func, $allowed_sort_funcs)){
 
             //sort the array of posts accordingly
-            usort($all_post_array, $sort_func);    
+            usort($all_post_array, $sort_func);
 
         }
 
         return $all_post_array;
+    }
+
+    private function get_processed_authors($per_page = 50, $paged = 0)
+    {
+        $bulkToolKit_plugin = new bulkNoindexToolkit();
+        $active_seo_plugin = $bulkToolKit_plugin->get_seo_plugin();
+
+        $offset = 0;
+        if($paged > 1){
+            $offset = (($paged - 1) * $per_page);
+        }
+
+        $user_args = array(
+            'number' => $per_page,
+            'offset' => $offset,
+            'count_total' => true,
+        );
+
+        if($this->orderby == 'post_count'){
+            $user_args['orderby'] = 'post_count';
+        } else {
+            $user_args['orderby'] = 'display_name';
+        }
+
+        if($this->order == 'asc'){
+            $user_args['order'] = 'ASC';
+        } else {
+            $user_args['order'] = 'DESC';
+        }
+
+        if(isset($_POST['s']) && $_POST['s']){
+            $user_args['search'] = '*' . sanitize_text_field($_POST['s']) . '*';
+            $user_args['search_columns'] = array('user_login', 'display_name', 'user_email');
+        }
+
+        $user_query = new WP_User_Query($user_args);
+        $this->total_authors = $user_query->get_total();
+
+        $all_authors = $user_query->get_results();
+        $all_author_array = array();
+
+        if($all_authors){
+            foreach($all_authors as $user){
+                $_uDat = new StdClass;
+                $_uDat->ID = $user->ID;
+                $_uDat->author_name = $user->display_name;
+                $_uDat->user_login = $user->user_login;
+                $_uDat->post_count = (int) count_user_posts($user->ID);
+
+                if($active_seo_plugin == 'rankmath'){
+                    $rm_robots = get_user_meta($user->ID, 'rank_math_robots', true);
+                    if(is_array($rm_robots)){
+                        $_uDat->noindex_status  = in_array('noindex',  $rm_robots) ? 1 : 0;
+                        $_uDat->nofollow_status = in_array('nofollow', $rm_robots) ? 1 : 0;
+                    } else {
+                        $_uDat->noindex_status  = get_user_meta($user->ID, '_bnitk_mfd_meta-robots-noindex',  true);
+                        $_uDat->nofollow_status = get_user_meta($user->ID, '_bnitk_mfd_meta-robots-nofollow', true);
+                    }
+                } else {
+                    $_uDat->noindex_status  = get_user_meta($user->ID, '_bnitk_mfd_meta-robots-noindex',  true);
+                    $_uDat->nofollow_status = get_user_meta($user->ID, '_bnitk_mfd_meta-robots-nofollow', true);
+                }
+
+                $all_author_array[] = $_uDat;
+            }
+        }
+
+        return $all_author_array;
     }
 
     private function get_processed_cats($cat_types = array('category'), $per_page = 50, $paged = 0 )
@@ -230,8 +300,8 @@ class BNI_MFD_WP_Table extends WP_List_Table
         }
 
         if(isset($_POST['s'])){
-            
-            $cat_args['search'] = filter_var($_POST['s'], FILTER_SANITIZE_STRING);
+
+            $cat_args['search'] = sanitize_text_field($_POST['s']);
 
         }
 
@@ -362,7 +432,7 @@ class BNI_MFD_WP_Table extends WP_List_Table
     public function set_search_filter(){
         $search_filter = '';
         if ( isset( $_GET['s'] ) && $_GET['s'] )
-            $search_filter = sanitize_text_field(filter_var($_GET['s'], FILTER_SANITIZE_STRING));
+            $search_filter = sanitize_text_field($_GET['s']);
         $this->search_filter = esc_sql( $search_filter );
 
     }
@@ -386,7 +456,7 @@ class BNI_MFD_WP_Table extends WP_List_Table
     {
         $tab = 'posts';
 
-        if ( isset( $_GET['tab'] ) && (strtolower($_GET['tab'] == 'posts') || strtolower($_GET['tab'] == 'cats')) )
+        if ( isset( $_GET['tab'] ) && (strtolower($_GET['tab'] == 'posts') || strtolower($_GET['tab'] == 'cats') || strtolower($_GET['tab'] == 'authors')) )
             $tab = sanitize_text_field($_GET['tab']);
 
         $this->tab = esc_sql( $tab );
@@ -422,10 +492,10 @@ class BNI_MFD_WP_Table extends WP_List_Table
     {
         $filter = '';
         if ( isset( $_GET['pt'] ) AND $_GET['pt'] )
-            $filter = esc_sql($_GET['pt']);
+            $filter = sanitize_text_field($_GET['pt']);
 
         if ( isset( $_GET['ct'] ) AND $_GET['ct'] )
-            $filter = esc_sql($_GET['ct']);
+            $filter = sanitize_text_field($_GET['ct']);
 
         $this->filter = esc_sql( $filter );
     }
@@ -500,38 +570,68 @@ class BNI_MFD_WP_Table extends WP_List_Table
     }
 
     /**
+     * @see WP_List_Table::get_columns_authors()
+     */
+    public function get_columns_authors()
+    {
+        $bulk_check = '<label class="screen-reader-text" for="cb-select-all">Select All</label><input id="cb-select-all" type="checkbox">';
+
+        $columns = array(
+            'checkbox_sel' => __( $bulk_check ),
+            'author_name'  => __( 'Author' ),
+            'user_login'   => __( 'Username' ),
+            'post_count'   => __( 'Post Count' ),
+            'noindex_tgl'  => __( 'No Index Page' ),
+            'nofollow_tgl' => __( 'No Follow Links' ),
+        );
+        return $columns;
+    }
+
+    /**
+     * @see WP_List_Table::get_sortable_columns_authors()
+     */
+    public function get_sortable_columns_authors()
+    {
+        $sortable = array(
+            'author_name' => array( 'title', true ),
+            'post_count'  => array( 'post_count', true ),
+        );
+        return $sortable;
+    }
+
+    /**
      * Prepare data for display
      * @see WP_List_Table::prepare_items()
      */
     public function prepare_items_post()
     {
-        
+
         $page_offset = 0;
         $columns  = $this->get_columns();
         $hidden   = array();
         $post_types = array();
         $sortable = $this->get_sortable_columns();
-        $this->_column_headers = array( 
+        $this->_column_headers = array(
             $columns,
             $hidden,
-            $sortable 
+            $sortable
         );
 
         if(isset( $_GET['items_per_page'])){
-            
+
             if($_GET['items_per_page'] == 'all'){
                 $this->posts_per_page = -1;
 
             }else{
-                $this->posts_per_page = $_GET['items_per_page'];
+                $this->posts_per_page = absint($_GET['items_per_page']);
             }
 
         }
-        
-        
+
+
         if(isset( $_GET['paged'])){
 
-            $page_offset = $_GET['paged'];
+            $page_offset = absint($_GET['paged']);
         }
         
         // Post results
@@ -668,35 +768,117 @@ class BNI_MFD_WP_Table extends WP_List_Table
      * Prepare categories for display and bulk editing
      * @see WP_List_Table::prepare_items_cats()
      */
+    public function prepare_items_authors()
+    {
+        $page_offset = 0;
+        $columns  = $this->get_columns_authors();
+        $hidden   = array();
+        $sortable = $this->get_sortable_columns_authors();
+        $this->_column_headers = array(
+            $columns,
+            $hidden,
+            $sortable
+        );
+
+        if(isset($_GET['items_per_page'])){
+            if($_GET['items_per_page'] == 'all'){
+                $this->posts_per_page = -1;
+            } else {
+                $this->posts_per_page = absint($_GET['items_per_page']);
+            }
+        }
+
+        if(isset($_GET['paged'])){
+            $page_offset = absint($_GET['paged']);
+        }
+
+        $authorResults = $this->get_processed_authors($this->posts_per_page, $page_offset);
+
+        $this->total_posts_pages = $this->total_authors;
+
+        $this->all_post_vals = array(
+            array(
+                'name'     => 'Authors',
+                'total'    => $this->total_authors,
+                'filt_lnk' => '',
+            )
+        );
+
+        $per_page     = $this->posts_per_page;
+        $total_items  = $this->total_authors;
+        $current_page = $this->get_pagenum();
+
+        $this->set_pagination_args( array(
+            'total_items' => $total_items,
+            'per_page'    => $per_page,
+            'total_pages' => ($per_page > 0) ? ceil($total_items / $per_page) : 1,
+        ) );
+
+        $permalink = __( 'Edit:' );
+        $posts = array();
+        if($authorResults){
+            foreach($authorResults as $key => $author){
+
+                $noindex_status  = '';
+                $nofollow_status = '';
+
+                if($author->noindex_status == 1){
+                    $noindex_status = 'checked';
+                }
+                if($author->nofollow_status == 1){
+                    $nofollow_status = 'checked';
+                }
+
+                $checkbox_sel = "<input class='cb-post' id='cb-select-".$author->ID."' type='checkbox' name='post[]' value='".$author->ID."'>";
+
+                $edit_link = get_edit_user_link($author->ID);
+                $author_display = esc_html($author->author_name);
+                $author_login   = esc_html($author->user_login);
+
+                $posts[$key] = new stdClass;
+                $posts[$key]->checkbox_sel = $checkbox_sel;
+                $posts[$key]->author_name  = "<a title='".esc_attr($permalink.' '.$author->author_name)."' href='".esc_url($edit_link)."'>".$author_display."</a>
+    <div class='row-actions'>
+    <span class='edit'><a target='_blank' href='".esc_url($edit_link)."'>Edit</a> | </span>
+    <span class='view'><a target='_blank' href='".esc_url(get_author_posts_url($author->ID))."' rel='bookmark'>View</a></span></div>";
+                $posts[$key]->user_login   = $author_login;
+                $posts[$key]->post_count   = $author->post_count;
+                $posts[$key]->noindex_tgl  = "<label class='bni-mfd-toggle'> <input type='checkbox' rel='authors' class='bnitk-mfd-toggle noindex-check' name='noindex[]' value='".$author->ID."' ".$noindex_status."><i></i></label>";
+                $posts[$key]->nofollow_tgl = "<label class='bni-mfd-toggle'> <input type='checkbox' rel='authors' class='bnitk-mfd-toggle nofollow-check' name='nofollow[]' value='".$author->ID."' ".$nofollow_status."><i></i></label>";
+            }
+            $this->items = $posts;
+        }
+    }
+
     public function prepare_items_cats()
     {
-        
+
         $page_offset = 0;
         $columns  = $this->get_columns_categories();
         $hidden   = array();
         $post_types = array();
         $sortable = $this->get_sortable_columns_categories();
-        $this->_column_headers = array( 
+        $this->_column_headers = array(
             $columns,
             $hidden,
-            $sortable 
+            $sortable
         );
 
         if(isset( $_GET['items_per_page'])){
-            
+
             if($_GET['items_per_page'] == 'all'){
                 $this->posts_per_page = -1;
 
             }else{
-                $this->posts_per_page = $_GET['items_per_page'];
+                $this->posts_per_page = absint($_GET['items_per_page']);
             }
 
         }
-        
-        
+
+
         if(isset( $_GET['paged'])){
 
-            $page_offset = $_GET['paged'];
+            $page_offset = absint($_GET['paged']);
         }
         /*
         // Post results
@@ -875,11 +1057,13 @@ class BNI_MFD_WP_Table extends WP_List_Table
         }
         
 
-        //build the current query string         
-        $query_string = $this->orderby != '' ? '&orderby='.$this->orderby.'&amp;order='.$this->order : '';        
+        //build the current query string
+        $query_string = $this->orderby != '' ? '&orderby='.esc_attr($this->orderby).'&amp;order='.esc_attr($this->order) : '';        
         
         if(isset($this->tab) && $this->tab == 'cats'){
             $query_string .= '&tab=cats';
+        } elseif(isset($this->tab) && $this->tab == 'authors'){
+            $query_string .= '&tab=authors';
         }
 
         ?> 
@@ -893,7 +1077,7 @@ class BNI_MFD_WP_Table extends WP_List_Table
                 if(array_key_exists('name',$pType)){
                 
                     if( strtolower($this->filter) == str_replace(' ','_',strtolower($pType["name"]))){
-                        $pst_class = 'class="current" aria-current="'.strtolower($pType["name"]).'"';
+                        $pst_class = 'class="current" aria-current="'.esc_attr(strtolower($pType["name"])).'"';
                     }else{
                         $pst_class = '';
                     }                
@@ -989,15 +1173,15 @@ class BNI_MFD_WP_Table extends WP_List_Table
             <input type="hidden" name="page" value="no-index-toolkit" />';
             
             if(isset($this->order)){
-                $_rendered_html  .= ' <input type="hidden" name="order" value="'.$this->order.'" />'; 
+                $_rendered_html  .= ' <input type="hidden" name="order" value="'.esc_attr($this->order).'" />';
             }
             
             if(isset($this->orderby)){
-                $_rendered_html  .=  '<input type="hidden" name="orderby" value="'.$this->orderby.'" />';
+                $_rendered_html  .=  '<input type="hidden" name="orderby" value="'.esc_attr($this->orderby).'" />';
             }
 
             if(isset($this->tab)){
-                $_rendered_html  .=  '<input type="hidden" name="tab" value="'.$this->tab.'" />';
+                $_rendered_html  .=  '<input type="hidden" name="tab" value="'.esc_attr($this->tab).'" />';
             }
 
         $_rendered_html  .= '

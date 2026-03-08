@@ -1,15 +1,25 @@
+// Helper function to safely escape text for HTML output
+function bnitkEscapeHtml(text) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+}
+
 //Toggle on/off the noindex or nofollow options
 jQuery(".bnitk-mfd-toggle").change(function(b) {
     var status = '';
     var result_chk = 0;
-   
-    if(this.checked) {        
+
+    if(this.checked) {
         result_chk = 1;
     }
     if(jQuery(this).attr('rel') != ''){
 	   switch(jQuery(this).attr('rel')) {
 		  case 'cats':
 		    var action = 'update_cat_callback'
+		    break;
+		  case 'authors':
+		    var action = 'update_author_callback'
 		    break;
 		  case 'page':
 		    var action = 'update_page_callback'
@@ -18,51 +28,56 @@ jQuery(".bnitk-mfd-toggle").change(function(b) {
 		    var action = 'update_page_callback'
 		}
 	}
-	    
+
 
 	var data = {
 		action: action,
 		post_id: this.value,
 		check_class: jQuery(this).attr('name'),
 		nonce: jQuery("input[name=nonce]").val(),
-		result: result_chk 
-	};	
-	
+		result: result_chk
+	};
+
 	jQuery.post( ajaxurl, data, function(response) {
 	    // handle response from the AJAX request.
-	    var resp = jQuery.parseJSON(response)	    
+	    var resp = jQuery.parseJSON(response)
 
 		//let the user know that the posts are updated
 		var upd_class = 'updated'
 	    if(resp.status != 'OK'){
-	    	upd_class = 'error'	
+	    	upd_class = 'error'
 	    }
 
-	    var notification_response = '<div class="'+upd_class+' notice"><p>'+resp.msg+'</p></div>';
-	    jQuery('.request-notification').html(notification_response);
-	    
+	    // Use DOM methods instead of .html() to prevent XSS
+	    var $notification = jQuery('<div></div>').addClass(upd_class + ' notice').append(jQuery('<p></p>').text(resp.msg));
+	    jQuery('.request-notification').empty().append($notification);
+
 	});
 });
 
 //functionality to Check all visible posts/pages in the table
 jQuery(document).on('change', '#cb-select-all', function(c) {
-	if(this.checked) {   		
-		jQuery('.cb-post').prop( "checked", true );	
+	if(this.checked) {
+		jQuery('.cb-post').prop( "checked", true );
     }else{
     	jQuery('.cb-post').prop( "checked", false );
-		
+
     }
-	
+
 });
 
 //Support for bulk updating the posts
 jQuery( "#bulk-update" ).submit(function( event ) {
-    
+
 	 if(jQuery(this).attr('rel') != ''){
 	   switch(jQuery(this).attr('rel')) {
 		  case 'catForm':
 		    var action = 'update_cat_bulk_callback';
 		    var itemTyp = 'terms';
+		    break;
+		  case 'authorForm':
+		    var action = 'update_author_bulk_callback';
+		    var itemTyp = 'authors';
 		    break;
 		  case 'pageForm':
 		    var action = 'update_page_bulk_callback';
@@ -74,24 +89,24 @@ jQuery( "#bulk-update" ).submit(function( event ) {
 		}
 	}
 
-	
+
 
   	var selPostIds = new Array();
 
 	jQuery("input.cb-post:checked").each(function() {
        selPostIds.push(jQuery(this).val());
     });
-	
+
 	var directive_val = jQuery('#bulk-action-selector').val();
-	
+
 	var data = {
 		action: action,
 		nonce: jQuery("input[name=nonce]").val(),
-		directive: directive_val, 
+		directive: directive_val,
 		post_ids: selPostIds
-	
-	};	
-	
+
+	};
+
 
 
 	var dir_action_set = 'add';
@@ -111,26 +126,29 @@ jQuery( "#bulk-update" ).submit(function( event ) {
 
 	if(confirmation){
 		jQuery.post( ajaxurl, data, function(response) {
-			
+
 			// convert response from the AJAX request to JSON.
 			var resp = jQuery.parseJSON(response)
-				
+
 			var status = resp.status;
 			var directive = resp.directive;
-			var post_ids = resp.post_ids;		
+			var post_ids = resp.post_ids;
 			var keyval = resp.val;
 
 			if(status == 'OK'){
-							
+
 				//set the status of the checkboxes to update (i.e. 'checked' or 'unchecked'
 				var checked_typ = false;
 				if(keyval == 1){
 					checked_typ = true;
 				}
-							
+
 				//iterate through the posts that need to have their checkboxes updated
+				// Use .filter() instead of building selectors from untrusted values to prevent selector injection
 				jQuery.each( post_ids, function( k, v ) {
-					jQuery("input[value="+v+"]."+directive+"-check").prop( "checked", checked_typ );			      
+					jQuery("input."+directive+"-check").filter(function() {
+						return jQuery(this).val() == v;
+					}).prop( "checked", checked_typ );
 			    });
 
 			}
@@ -141,8 +159,9 @@ jQuery( "#bulk-update" ).submit(function( event ) {
 		    	upd_class = 'error';
 		    }
 
-		    var notification_response = '<div class="'+upd_class+' notice"><p>'+resp.msg+'</p></div>';
-		    jQuery('.request-notification').html(notification_response);
+		    // Use DOM methods instead of .html() to prevent XSS
+		    var $notification = jQuery('<div></div>').addClass(upd_class + ' notice').append(jQuery('<p></p>').text(resp.msg));
+		    jQuery('.request-notification').empty().append($notification);
 		});
 	}
   event.preventDefault();
